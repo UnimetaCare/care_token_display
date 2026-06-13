@@ -1,0 +1,564 @@
+<!doctype html>
+{% load static %}
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    {% if not announcement_payload and auto_refresh_interval %}
+    <meta http-equiv="refresh" content="{{ auto_refresh_interval }}" />
+    {% endif %}
+    <title>Token Display</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #1fb6c9;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .token-display-container {
+        height: 100vh;
+        background: #1fb6c9;
+        padding: 16px;
+        display: grid;
+        gap: 16px;
+      }
+
+      /* Grid layouts based on item count */
+      .token-display-container.grid-cols-1 {
+        grid-template-columns: 1fr;
+      }
+
+      .token-display-container.grid-cols-2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .token-display-container.grid-cols-6 {
+        grid-template-columns: repeat(6, 1fr);
+      }
+
+      .service-point-card {
+        padding: 16px;
+        height: 100%;
+        background: #07131f;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .service-point-header {
+        padding: 24px;
+        background: #122235;
+        border-radius: 16px 16px 0 0;
+      }
+
+      .sub-queue-name {
+        color: #ffffff;
+        text-transform: uppercase;
+        white-space: nowrap;
+        font-size: 16px;
+        margin: 8px 0 0 0;
+        padding: 0;
+      }
+
+      .resource-name {
+        font-weight: bold;
+        color: #ffffff;
+        font-size: 24px;
+        margin: 0;
+        padding: 0;
+      }
+
+      .token-display-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #07131f;
+        padding: 16px;
+      }
+
+      .token-number {
+        font-weight: 900;
+        color: #ffd83d;
+        font-size: 48px;
+        padding: 8px 12px;
+        overflow: hidden;
+        text-align: center;
+      }
+
+      .upcoming-tokens {
+        background: #122235;
+        border-radius: 0 0 16px 16px;
+        padding: 12px 16px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .upcoming-tokens-label {
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .upcoming-tokens-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+
+      .upcoming-token {
+        background: #07131f;
+        border-radius: 8px;
+        padding: 8px 4px;
+        color: #e5e7eb;
+        font-weight: 800;
+        font-size: 18px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .upcoming-token.is-empty {
+        color: #4b5563;
+      }
+
+      .empty-screen {
+        position: fixed;
+        inset: 0;
+        background: #000000;
+      }
+
+      /* Responsive adjustments */
+      @media (min-width: 640px) {
+        .sub-queue-name {
+          font-size: 18px;
+        }
+
+        .resource-name {
+          font-size: 30px;
+        }
+
+        .token-number {
+          font-size: 64px;
+        }
+
+        .upcoming-tokens-label {
+          font-size: 14px;
+        }
+
+        .upcoming-token {
+          font-size: 24px;
+          padding: 10px 6px;
+        }
+      }
+
+      @media (min-width: 768px) {
+        .sub-queue-name {
+          font-size: 24px;
+        }
+
+        .resource-name {
+          font-size: 36px;
+        }
+
+        .token-number {
+          font-size: 96px;
+        }
+
+        .upcoming-tokens-label {
+          font-size: 16px;
+        }
+
+        .upcoming-token {
+          font-size: 32px;
+          padding: 12px 8px;
+        }
+      }
+
+      /* Column span classes for grid items */
+      .col-span-1 {
+        grid-column: span 1;
+      }
+
+      .col-span-2 {
+        grid-column: span 2;
+      }
+
+      .col-span-3 {
+        grid-column: span 3;
+      }
+
+      .col-span-6 {
+        grid-column: span 6;
+      }
+
+      .logo-overlay {
+        position: fixed;
+        top: 14px;
+        left: 20px;
+        z-index: 100;
+        border-radius: 8px;
+        padding: 6px 12px;
+        display: flex;
+        align-items: center;
+      }
+
+      .logo-overlay img {
+        height: 36px;
+        width: auto;
+        display: block;
+        filter: invert(1) brightness(2);
+      }
+    </style>
+  </head>
+  <body>
+    {% if announcement_payload %}
+    <div id="audio-unlock-overlay" style="
+      position:fixed;inset:0;z-index:9999;background:#07131f;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      cursor:pointer;user-select:none;
+    ">
+      <img src="{% static 'token_display/logo.png' %}" alt="Unimetacare"
+           style="height:56px;width:auto;filter:invert(1) brightness(2);margin-bottom:32px;" />
+      <div style="color:#ffd83d;font-size:28px;font-weight:900;letter-spacing:0.04em;">TAP TO START</div>
+      <div style="color:#9ca3af;font-size:14px;margin-top:12px;">Touch anywhere to enable audio announcements</div>
+    </div>
+    <script>
+      (function () {
+        var overlay = document.getElementById("audio-unlock-overlay");
+        if (!overlay) return;
+        var AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) { overlay.style.display = "none"; return; }
+        // Check if audio was already unlocked in this session
+        try {
+          if (sessionStorage.getItem("td_audio_unlocked") === "1") {
+            overlay.style.display = "none";
+            return;
+          }
+        } catch (_) {}
+        overlay.addEventListener("click", function () {
+          var ctx = new AudioCtx();
+          ctx.resume().then(function () {
+            ctx.close();
+            try { sessionStorage.setItem("td_audio_unlocked", "1"); } catch (_) {}
+            overlay.style.display = "none";
+          });
+        }, { once: true });
+      })();
+    </script>
+    {% endif %}
+    {% if sub_queues and item_count > 0 %}
+    <div class="logo-overlay">
+      <img src="{% static 'token_display/logo.png' %}" alt="Unimetacare" />
+    </div>
+    <div class="token-display-container {{ grid_class }}">
+      {% for sub_queue in sub_queues %}
+      <div class="service-point-card {{ sub_queue.col_span }}">
+        <div class="service-point-header">
+          {% if sub_queue.resource_name %}
+          <div class="resource-name">{{ sub_queue.resource_name }}</div>
+          {% endif %}
+          <div class="sub-queue-name">{{ sub_queue.sub_queue_name }}</div>
+        </div>
+        <div class="token-display-area">
+          <div class="token-number">{{ sub_queue.token }}</div>
+        </div>
+        {% if sub_queue.upcoming_tokens %}
+        <div class="upcoming-tokens">
+          <div class="upcoming-tokens-label">Next in queue →</div>
+          <div class="upcoming-tokens-grid">
+            {% for upcoming in sub_queue.upcoming_tokens %}
+            <span class="upcoming-token">{{ upcoming }}</span>
+            {% endfor %}
+            {% for _ in sub_queue.upcoming_padding %}
+            <span class="upcoming-token is-empty">—</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-screen"></div>
+    {% endif %} 
+    {% if announcement_payload %} 
+    {{ announcement_payload|json_script:"token-payload" }}
+    <script>
+      (function () {
+        "use strict";
+
+        var STORAGE_KEY = "token_display:last_announced:v1";
+        var FRAGMENTS_BASE = "{% static 'token_display/sounds/' %}";
+        var QUEUE_TIMEOUT_MS = 30000;
+        // Short pause inserted *before* every spelled-out character so digits
+        // and letters don't slur into one another.
+        var INTER_CHAR_GAP_S = 0.08;
+        // Pause between successive language passes for the same token.
+        var INTER_LANG_GAP_S = 1.0;
+
+        var payloadEl = document.getElementById("token-payload");
+        if (!payloadEl) return;
+
+        var payload;
+        try {
+          payload = JSON.parse(payloadEl.textContent);
+        } catch (e) {
+          console.error("[token-display] invalid payload", e);
+          return;
+        }
+
+        var subQueues = (payload && payload.sub_queues) || [];
+        var langs = (payload && payload.langs) || [];
+        var refreshSeconds =
+          Number(payload && payload.auto_refresh_interval) || 0;
+
+        var refreshScheduled = false;
+        // Mount a fresh <meta http-equiv="refresh"> only once we're done with
+        // playback (or have decided not to play). This guarantees the page is
+        // never reloaded mid-announcement, while still relying on the browser's
+        // native refresh mechanism for the actual reload.
+        function scheduleRefresh() {
+          if (refreshScheduled) return;
+          refreshScheduled = true;
+          if (refreshSeconds <= 0) return;
+          var meta = document.createElement("meta");
+          meta.setAttribute("http-equiv", "refresh");
+          meta.setAttribute("content", String(refreshSeconds));
+          meta.id = "token-display-refresh";
+          document.head.appendChild(meta);
+        }
+
+        function loadStore() {
+          try {
+            var raw = window.localStorage.getItem(STORAGE_KEY);
+            var parsed = raw ? JSON.parse(raw) : {};
+            return parsed && typeof parsed === "object" ? parsed : {};
+          } catch (_) {
+            return {};
+          }
+        }
+
+        function saveStore(store) {
+          try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+          } catch (_) {
+            // storage quota / disabled — non-fatal
+          }
+        }
+
+        var store = loadStore();
+
+        // Prune keys for sub-queues no longer displayed.
+        var currentIds = {};
+        for (var i = 0; i < subQueues.length; i++)
+          currentIds[subQueues[i].id] = true;
+        for (var key in store) {
+          if (
+            Object.prototype.hasOwnProperty.call(store, key) &&
+            !currentIds[key]
+          ) {
+            delete store[key];
+          }
+        }
+
+        // Build the announcement queue: diff payload against storage.
+        var queue = [];
+        for (var j = 0; j < subQueues.length; j++) {
+          var entry = subQueues[j];
+          var code = entry.token_code;
+          if (!code || code === "--") continue; // never overwrite real with null
+          if (store[entry.id] === code) continue; // already announced
+          queue.push(entry);
+        }
+
+        function persistAll() {
+          for (var k = 0; k < queue.length; k++) {
+            store[queue[k].id] = queue[k].token_code;
+          }
+          saveStore(store);
+        }
+
+        if (queue.length === 0) {
+          saveStore(store);
+          scheduleRefresh();
+          return;
+        }
+
+        // Web Audio is required. If unavailable, mark everything announced
+        // and fall through silently.
+        var AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) {
+          persistAll();
+          scheduleRefresh();
+          return;
+        }
+
+        // Build the per-language fragment passes for an entry. Each pass is
+        // ``[chime, <lang>/prefix, <lang>/A, <lang>/0, ...]``; passes are
+        // separated at schedule-time by ``INTER_LANG_GAP_S`` of silence.
+        // Fragment names map to ``<FRAGMENTS_BASE>/<name>.wav``.
+        function passesFor(entry) {
+          var code = String(entry.token_code).toUpperCase();
+          var chars = [];
+          for (var n = 0; n < code.length; n++) {
+            var ch = code.charAt(n);
+            if (/[A-Z0-9]/.test(ch)) chars.push(ch);
+          }
+          var passes = [];
+          for (var l = 0; l < langs.length; l++) {
+            var lang = langs[l];
+            var pass = ["chime", lang + "/prefix"];
+            for (var c = 0; c < chars.length; c++) {
+              pass.push(lang + "/" + chars[c]);
+            }
+            passes.push(pass);
+          }
+          return passes;
+        }
+
+        // Collect the unique fragment names we actually need so we only
+        // fetch+decode each one once.
+        var allNames = {};
+        for (var q = 0; q < queue.length; q++) {
+          var ps = passesFor(queue[q]);
+          for (var pp = 0; pp < ps.length; pp++) {
+            for (var p = 0; p < ps[pp].length; p++) {
+              allNames[ps[pp][p]] = true;
+            }
+          }
+        }
+
+        var ctx = new AudioCtx();
+        var bufferCache = {};
+
+        function loadBuffer(name) {
+          if (bufferCache[name]) return bufferCache[name];
+          // Encode each path segment but leave the slashes intact so the
+          // browser fetches the correct per-language subdirectory.
+          var url =
+            FRAGMENTS_BASE +
+            name.split("/").map(encodeURIComponent).join("/") +
+            ".wav";
+          bufferCache[name] = fetch(url, { credentials: "same-origin" })
+            .then(function (resp) {
+              if (!resp.ok) {
+                throw new Error("HTTP " + resp.status + " for " + name);
+              }
+              return resp.arrayBuffer();
+            })
+            .then(function (data) {
+              return new Promise(function (resolve, reject) {
+                // Older WebKit only supports the callback form.
+                ctx.decodeAudioData(data, resolve, reject);
+              });
+            });
+          return bufferCache[name];
+        }
+
+        function abortQueue(reason) {
+          if (reason) console.error("[token-display] abort:", reason);
+          persistAll();
+          try {
+            ctx.close();
+          } catch (_) {}
+          scheduleRefresh();
+        }
+
+        // Hard ceiling on the entire queue.
+        var queueTimeout = setTimeout(function () {
+          abortQueue("queue timeout");
+        }, QUEUE_TIMEOUT_MS);
+
+        function playQueue() {
+          var preload = Object.keys(allNames).map(loadBuffer);
+          Promise.all(preload)
+            .then(
+              function (loaded) {
+                // Index buffers by name for the scheduler.
+                var bufByName = {};
+                var keys = Object.keys(allNames);
+                for (var i = 0; i < keys.length; i++) {
+                  bufByName[keys[i]] = loaded[i];
+                }
+
+                return ctx.resume().then(function () {
+                  var cursor = ctx.currentTime + 0.05; // tiny lead so the first buffer doesn't get clipped
+                  var lastSource = null;
+
+                  queue.forEach(function (entry) {
+                    var passes = passesFor(entry);
+                    for (var pi = 0; pi < passes.length; pi++) {
+                      if (pi > 0) cursor += INTER_LANG_GAP_S;
+                      var names = passes[pi];
+                      for (var i = 0; i < names.length; i++) {
+                        var name = names[i];
+                        var buf = bufByName[name];
+                        if (!buf) continue;
+                        // Insert the inter-character gap before each spelled-out
+                        // letter/digit (but not before the chime or any
+                        // <lang>/prefix fragment).
+                        if (name !== "chime" && !/\/prefix$/.test(name)) {
+                          cursor += INTER_CHAR_GAP_S;
+                        }
+                        var src = ctx.createBufferSource();
+                        src.buffer = buf;
+                        src.connect(ctx.destination);
+                        src.start(cursor);
+                        cursor += buf.duration;
+                        lastSource = src;
+                      }
+                    }
+                    // Persist as soon as the entry is fully scheduled — the
+                    // sources are already locked to the AudioContext clock.
+                    store[entry.id] = entry.token_code;
+                  });
+                  saveStore(store);
+
+                  if (!lastSource) {
+                    clearTimeout(queueTimeout);
+                    scheduleRefresh();
+                    return;
+                  }
+                  lastSource.onended = function () {
+                    clearTimeout(queueTimeout);
+                    try {
+                      ctx.close();
+                    } catch (_) {}
+                    scheduleRefresh();
+                  };
+                });
+              },
+              function (err) {
+                clearTimeout(queueTimeout);
+                abortQueue(err);
+              },
+            )
+            .catch(function (err) {
+              clearTimeout(queueTimeout);
+              abortQueue(err);
+            });
+        }
+
+        playQueue();
+      })();
+    </script>
+    {% endif %}
+  </body>
+</html>
